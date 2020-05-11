@@ -1,0 +1,13 @@
+*
+!*.*
+!.gitignore
+!*/
+!AUTHORS
+!LICENSE
+!Makefile
+!*-solution*
+!asst*_sol*
+
+*.o
+*~
+.clang-format
