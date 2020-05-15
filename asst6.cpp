@@ -624,7 +624,7 @@ static void motion(const int x, const int y) {
           (*active_object_node).accelerate(trans * .005);
       }
       else {
-          Matrix4 mat = Matrix4::makeYRotation(dy) * Matrix4::makeXRotation(dx);
+          Matrix4 mat = Matrix4::makeXRotation(dy) * Matrix4::makeZRotation(dx);
           Cvec4 newCvec4 = mat * Cvec4((*active_object_node).getVelocity());
           Cvec3 newVelocity = Cvec3(newCvec4);
           (*active_object_node).setVelocity(newVelocity);
@@ -1266,7 +1266,7 @@ static void initScene() {
 
   g_robot1Node.reset(new SgObjectNode(RigTForm(Cvec3(-2, 0, 0)), Cvec3(0, .05, 0), Cvec3(2, 0, 0)));
 
-  g_robot2Node.reset(new SgObjectNode(RigTForm(Cvec3(2, 0, 0)), Cvec3(0, 0, 0), Cvec3(-2, 0, 0)));
+  g_robot2Node.reset(new SgObjectNode(RigTForm(Cvec3(2, 0, 0)), Cvec3(.03, .02, .01), Cvec3(-2, 0, 0)));
 
 
 
