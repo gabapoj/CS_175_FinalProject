@@ -84,6 +84,11 @@ static double g_arcballScale = 1;
 static bool g_pickingMode = false;
 static bool g_animMode = false;
 
+static double g_yRot = 34.5;
+static double g_xRot = 315;
+static bool g_friction = false;
+static bool g_universal_gravitation = false;
+
 // -------- Shaders
 
 static const int g_numShaders = 3, g_numRegularShaders = 2;
@@ -177,15 +182,15 @@ struct Geometry {
 typedef SgGeometryShapeNode<Geometry> MyShapeNode;
 
 // Vertex buffer and index buffer associated with the ground and cube geometry
-static shared_ptr<Geometry> g_ground, g_cube, g_sphere;
+static shared_ptr<Geometry> g_ground, g_cube, g_sphere, g_triangle;
 
 // --------- Scene
 
 static const Cvec3 g_light1(2.0, 3.0, 14.0), g_light2(-2, -3.0, -5.0);  // define two lights positions in world space
 
 static shared_ptr<SgRootNode> g_world;
-static shared_ptr<SgRbtNode> g_skyNode, g_groundNode, g_robot2Node;
-static shared_ptr<SgObjectNode> g_robot1Node;
+static shared_ptr<SgRbtNode> g_skyNode, g_groundNode;
+static shared_ptr<SgObjectNode> g_robot1Node, g_robot2Node;
 
 static shared_ptr<SgRbtNode> g_currentCameraNode;
 static shared_ptr<SgRbtNode> g_currentPickedRbtNode;
@@ -196,7 +201,7 @@ static bool firstLeft = true;
 static int g_msBetweenKeyFrames = 2000;
 static int g_animateFramesPerSecond = 60;
 static bool g_loopState = false;
-static bool g_physics_mode = true;
+static bool g_physics_mode = false;
 static vector<shared_ptr<SgObjectNode>> g_objectNodes;
 
 
@@ -240,6 +245,19 @@ static void initSphere() {
   g_sphere.reset(new Geometry(&vtx[0], &idx[0], vtx.size(), idx.size()));
 }
 
+static void initTriangle() {
+    int ibLen, vbLen;
+    getCubeVbIbLen(vbLen, ibLen);
+
+
+    // Temporary storage for cube geometry
+    vector<VertexPN> vtx(vbLen);
+    vector<unsigned short> idx(ibLen);
+
+    makeTriangle(1, vtx.begin(), idx.begin());
+    g_triangle.reset(new Geometry(&vtx[0], &idx[0], vbLen, ibLen));
+}
+
 static void initRobots() {
   // Init whatever geometry needed for the robots
 }
@@ -262,56 +280,56 @@ static void updateFrustFovY() {
 }
 
 static Matrix4 makeProjectionMatrix() {
-  return Matrix4::makeProjection(
-           g_frustFovY, g_windowWidth / static_cast <double> (g_windowHeight),
-           g_frustNear, g_frustFar);
+    return Matrix4::makeProjection(
+        g_frustFovY, g_windowWidth / static_cast <double> (g_windowHeight),
+        g_frustNear, g_frustFar);
 }
 
 enum ManipMode {
-  ARCBALL_ON_PICKED,
-  ARCBALL_ON_SKY,
-  EGO_MOTION
+    ARCBALL_ON_PICKED,
+    ARCBALL_ON_SKY,
+    EGO_MOTION
 };
 
 static ManipMode getManipMode() {
-  // if nothing is picked or the picked transform is the transfrom we are viewing from
-  if (g_currentPickedRbtNode == NULL || g_currentPickedRbtNode == g_currentCameraNode) {
-    if (g_currentCameraNode == g_skyNode && g_activeCameraFrame == WORLD_SKY)
-      return ARCBALL_ON_SKY;
+    // if nothing is picked or the picked transform is the transfrom we are viewing from
+    if (g_currentPickedRbtNode == NULL || g_currentPickedRbtNode == g_currentCameraNode) {
+        if (g_currentCameraNode == g_skyNode && g_activeCameraFrame == WORLD_SKY)
+            return ARCBALL_ON_SKY;
+        else
+            return EGO_MOTION;
+    }
     else
-      return EGO_MOTION;
-  }
-  else
-    return ARCBALL_ON_PICKED;
+        return ARCBALL_ON_PICKED;
 }
 
 static bool shouldUseArcball() {
-  return (g_currentPickedRbtNode!=0);
-  //  return getManipMode() != EGO_MOTION;
+    return (g_currentPickedRbtNode != 0);
+    //  return getManipMode() != EGO_MOTION;
 }
 
 // The translation part of the aux frame either comes from the current
 // active object, or is the identity matrix when
 static RigTForm getArcballRbt() {
-  switch (getManipMode()) {
-  case ARCBALL_ON_PICKED:
-    return getPathAccumRbt(g_world, g_currentPickedRbtNode);
-  case ARCBALL_ON_SKY:
-    return RigTForm();
-  case EGO_MOTION:
-    return getPathAccumRbt(g_world, g_currentCameraNode);
-  default:
-    throw runtime_error("Invalid ManipMode");
-  }
+    switch (getManipMode()) {
+    case ARCBALL_ON_PICKED:
+        return getPathAccumRbt(g_world, g_currentPickedRbtNode);
+    case ARCBALL_ON_SKY:
+        return RigTForm();
+    case EGO_MOTION:
+        return getPathAccumRbt(g_world, g_currentCameraNode);
+    default:
+        throw runtime_error("Invalid ManipMode");
+    }
 }
 
 static void updateArcballScale() {
-  RigTForm arcballEye = inv(getPathAccumRbt(g_world, g_currentCameraNode)) * getArcballRbt();
-  double depth = arcballEye.getTranslation()[2];
-  if (depth > -CS175_EPS)
-    g_arcballScale = 0.02;
-  else
-g_arcballScale = getScreenToEyeScale(depth, g_frustFovY, g_windowHeight);
+    RigTForm arcballEye = inv(getPathAccumRbt(g_world, g_currentCameraNode)) * getArcballRbt();
+    double depth = arcballEye.getTranslation()[2];
+    if (depth > -CS175_EPS)
+        g_arcballScale = 0.02;
+    else
+        g_arcballScale = getScreenToEyeScale(depth, g_frustFovY, g_windowHeight);
 }
 
 static void drawArcBall(const ShaderState& curSS) {
@@ -327,6 +345,65 @@ static void drawArcBall(const ShaderState& curSS) {
 
     // switch back to solid mode
     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+}
+
+static void drawVelocityVector(const ShaderState& curSS) {
+    if (getManipMode() != ARCBALL_ON_PICKED) {
+        return;
+    }
+    Cvec3 velo;
+    for (int a = 0; a < g_objectNodes.size(); a++) {
+        if (g_objectNodes[a] == g_currentPickedRbtNode) {
+            velo = (*g_objectNodes[a]).getVelocity();
+        }
+    }
+
+    double magnitude = sqrt(velo[0] * velo[0] + velo[1] * velo[1] + velo[2] * velo[2]);
+    velo = Cvec3(velo[0]/magnitude, velo[1] / magnitude, velo[2] / magnitude);
+
+    double theta_2 = -asin(-velo[1]);
+    double theta_1 = 0;
+    if (acos(theta_2) != 0) {
+        double temp = 0;
+        if (velo[0] != 0) {
+            temp = velo[0] / cos(theta_2);
+        }
+        else {
+            temp = velo[2] / cos(theta_2);
+        }
+        if (temp > 1) {
+            temp = 0.9999999;
+        }
+        if (temp < -1) {
+            temp = -0.99999999;
+        }
+        if (velo[0] != 0) {
+            theta_1 = acos(temp);
+            theta_1 *= velo[2] / abs(velo[2]);
+        }
+        else {
+            theta_1 = asin(temp);
+        }
+
+    }
+    else {
+        //fix this
+        theta_1 = -acos(velo[0]);
+    }
+    theta_2 *= 180 / 3.14159265;
+    theta_1 *= 180 / 3.14159265;
+    //cout << acos(0);
+    RigTForm vectorEye = inv(getPathAccumRbt(g_world, g_currentCameraNode)) * getArcballRbt();
+    Matrix4 MVM = rigTFormToMatrix(vectorEye) *Matrix4::makeYRotation(-theta_1 )*Matrix4::makeZRotation(theta_2 )* Matrix4::makeScale(Cvec3(2, 0.2, 0.2) * g_arcballScale * g_arcballScreenRadius)*Matrix4::makeTranslation(Cvec3(0.5,0,0));
+    sendModelViewNormalMatrix(curSS, MVM, normalMatrix(MVM));
+    safe_glUniform3f(curSS.h_uColor, 0.27, 0.82, 0.35); // set color
+    g_cube->draw(curSS);
+
+
+    MVM = rigTFormToMatrix(vectorEye) * Matrix4::makeYRotation(-theta_1) * Matrix4::makeZRotation(theta_2) * Matrix4::makeScale(Cvec3(.8, .8, .8) * g_arcballScale * g_arcballScreenRadius) * Matrix4::makeTranslation(Cvec3(1.9, 0, 0)) * Matrix4::makeYRotation(g_yRot) * Matrix4::makeZRotation(g_xRot);
+    sendModelViewNormalMatrix(curSS, MVM, normalMatrix(MVM));
+    g_triangle->draw(curSS);
+
 }
 
 static void drawStuff(const ShaderState& curSS, bool picking) {
@@ -347,11 +424,18 @@ static void drawStuff(const ShaderState& curSS, bool picking) {
     safe_glUniform3f(curSS.h_uLight2, eyeLight2[0], eyeLight2[1], eyeLight2[2]);
 
     if (!picking) {
+        SgObjectNode exampleSgObjectNode;
+
         Drawer drawer(invEyeRbt, curSS);
+        
         g_world->accept(drawer);
 
-        if (g_displayArcball && shouldUseArcball())
+        if (g_currentPickedRbtNode != NULL && !g_displayArcball && typeid(*g_currentPickedRbtNode).name() == typeid(exampleSgObjectNode).name() ) {
+            drawVelocityVector(curSS);
+        }
+        else if (shouldUseArcball()) {
             drawArcBall(curSS);
+        }
     }
     else {
         Picker picker(invEyeRbt, curSS);
@@ -360,7 +444,7 @@ static void drawStuff(const ShaderState& curSS, bool picking) {
         g_currentPickedRbtNode = picker.getRbtNodeAtXY(g_mouseClickX, g_mouseClickY);
         if (g_currentPickedRbtNode == g_groundNode)
             g_currentPickedRbtNode = shared_ptr<SgRbtNode>(); // set to NULL
-
+        //JAKESPOT
         cout << (g_currentPickedRbtNode ? "Part picked" : "No part picked") << endl;
     }
 }
@@ -515,34 +599,66 @@ static void motion(const int x, const int y) {
 
   // the matrix for the auxiliary frame (the w.r.t.)
   RigTForm A = makeMixedFrame(getArcballRbt(), getPathAccumRbt(g_world, g_currentCameraNode));
-
-  shared_ptr<SgRbtNode> target;
-  switch (getManipMode()) {
-  case ARCBALL_ON_PICKED:
-    target = g_currentPickedRbtNode;
-    break;
-  case ARCBALL_ON_SKY:
-    target = g_skyNode;
-    break;
-  case EGO_MOTION:
-    target = g_currentCameraNode;
-    break;
+  
+  shared_ptr<SgObjectNode> active_object_node;
+  bool velocity_mode = false;
+  for (int a = 0; a < g_objectNodes.size(); a++) {
+      if (g_objectNodes[a] == g_currentPickedRbtNode) {
+          active_object_node = g_objectNodes[a];
+          velocity_mode = true;
+      }
   }
+  if (getManipMode() == ARCBALL_ON_PICKED && !g_displayArcball && velocity_mode) {
 
-  A = inv(getPathAccumRbt(g_world, target, 1)) * A;
+      
+      A = inv(getPathAccumRbt(g_world, g_currentPickedRbtNode, 1)) * A;
 
 
-  if ((g_mouseLClickButton && !g_mouseRClickButton && !g_spaceDown) //rotating
-      && target == g_skyNode) {
-    RigTForm My = getMRbt(dx, 0);
-    RigTForm Mx = getMRbt(0, dy);
-    RigTForm B = makeMixedFrame(getArcballRbt(), RigTForm());
-    RigTForm O = doMtoOwrtA(Mx, target->getRbt(), A);
-    O = doMtoOwrtA(My, O, B);
-    target->setRbt(O);
+      if ((!g_mouseLClickButton && g_mouseRClickButton && !g_spaceDown)) {
+          Cvec3 trans = Cvec3(dx, dy, 0);
+          (*active_object_node).accelerate(trans*.005);
+
+      }
+      else if ((!g_mouseLClickButton && g_mouseRClickButton && g_spaceDown)) {
+          Cvec3 trans = Cvec3(0, 0, dx);
+          (*active_object_node).accelerate(trans * .005);
+      }
+      else {
+          Matrix4 mat = Matrix4::makeYRotation(dy) * Matrix4::makeXRotation(dx);
+          Cvec4 newCvec4 = mat * Cvec4((*active_object_node).getVelocity());
+          Cvec3 newVelocity = Cvec3(newCvec4);
+          (*active_object_node).setVelocity(newVelocity);
+      }
   }
-  else{
-    target->setRbt(doMtoOwrtA(M, target->getRbt(), A));
+  else {
+      shared_ptr<SgRbtNode> target;
+      switch (getManipMode()) {
+      case ARCBALL_ON_PICKED:
+          target = g_currentPickedRbtNode;
+          break;
+      case ARCBALL_ON_SKY:
+          target = g_skyNode;
+          break;
+      case EGO_MOTION:
+          target = g_currentCameraNode;
+          break;
+      }
+
+      A = inv(getPathAccumRbt(g_world, target, 1)) * A;
+
+
+      if ((g_mouseLClickButton && !g_mouseRClickButton && !g_spaceDown) //rotating
+          && target == g_skyNode) {
+          RigTForm My = getMRbt(dx, 0);
+          RigTForm Mx = getMRbt(0, dy);
+          RigTForm B = makeMixedFrame(getArcballRbt(), RigTForm());
+          RigTForm O = doMtoOwrtA(Mx, target->getRbt(), A);
+          O = doMtoOwrtA(My, O, B);
+          target->setRbt(O);
+      }
+      else {
+          target->setRbt(doMtoOwrtA(M, target->getRbt(), A));
+      }
   }
   g_mouseClickX += dx;
   g_mouseClickY += dy;
@@ -751,10 +867,31 @@ static void physicsTimerCallback(int ms) {
         for (int a = 0; a < g_objectNodes.size(); a++) {
             (*g_objectNodes[a]).update();
         }
+        if (g_friction) {
+            for (int a = 0; a < g_objectNodes.size(); a++) {
+                (*g_objectNodes[a]).accelerate( (*g_objectNodes[a]).getVelocity()*-0.001 );
+                Cvec3 velo = (*g_objectNodes[a]).getVelocity();
+            }
+        }
+        if (g_universal_gravitation) {
+            for (int a = 0; a < g_objectNodes.size(); a++) {
+                for (int b = 0; b < g_objectNodes.size(); b++) {
+                    if (a != b) {
+                        Cvec3 vector = (*g_objectNodes[b]).getRbt().getTranslation() - (*g_objectNodes[a]).getRbt().getTranslation();
+                        double r = sqrt(vector[0] * vector[0] + vector[1] * vector[1] + vector[2] * vector[2]);
+                        //Cvec3 acceleration = ;
+                        (*g_objectNodes[a]).accelerate(vector / r / r / r * 0.01 * (*g_objectNodes[b]).getMass());
+                    }
+                }
+            }
+        }
+
         glutTimerFunc(1000 / g_animateFramesPerSecond,
             physicsTimerCallback,
             ms + 1000 / g_animateFramesPerSecond);
     }
+    glutPostRedisplay();
+
 }
 
 static void animateTimerCallback(int ms) {
@@ -888,6 +1025,14 @@ static void keyboard(const unsigned char key, const int x, const int y) {
   case 'f':
     g_activeShader = (g_activeShader + 1) % g_numRegularShaders;
     break;
+  case 'F':
+      g_friction = !g_friction;
+      cout << g_friction;
+      break;
+  case 'U':
+      g_universal_gravitation = !g_universal_gravitation;
+      break;
+
   case 'v':
   {
     shared_ptr<SgRbtNode> viewers[] = {g_skyNode, g_robot1Node, g_robot2Node};
@@ -899,6 +1044,15 @@ static void keyboard(const unsigned char key, const int x, const int y) {
     }
   }
   break;
+  case 'V':
+      if (g_displayArcball) {
+          g_displayArcball = false;
+      }
+      else {
+          g_displayArcball = true;
+      }
+      glutPostRedisplay();
+      break;
   case 'p':
     g_pickingMode = !g_pickingMode;
     cerr << "Picking mode is " << (g_pickingMode ? "on" : "off") << endl;
@@ -911,6 +1065,15 @@ static void keyboard(const unsigned char key, const int x, const int y) {
       g_loopState = false;
       if (g_script.size() > 3) {
           animateTimerCallback(0);
+      }
+      break;
+  case 'g':
+      if (!g_physics_mode) {
+          g_physics_mode = true;
+          physicsTimerCallback(0);
+      }
+      else {
+          g_physics_mode = false;
       }
       break;
   case 'l':
@@ -1016,6 +1179,7 @@ static void initGeometry() {
   initGround();
   initCubes();
   initSphere();
+  initTriangle();
   initRobots();
 }
 
@@ -1100,10 +1264,14 @@ static void initScene() {
   g_groundNode->addChild(shared_ptr<MyShapeNode>(
                            new MyShapeNode(g_ground, Cvec3(0.1, 0.95, 0.1))));
 
-  g_robot1Node.reset(new SgObjectNode(RigTForm(Cvec3(-2, 1, 0)), Cvec3(.1, 0, 0), Cvec3(0, 0, 0)));
-  g_robot2Node.reset(new SgRbtNode(RigTForm(Cvec3(2, 2, 0))));
+  g_robot1Node.reset(new SgObjectNode(RigTForm(Cvec3(-2, 0, 0)), Cvec3(0, .05, 0), Cvec3(2, 0, 0)));
+
+  g_robot2Node.reset(new SgObjectNode(RigTForm(Cvec3(2, 0, 0)), Cvec3(0, 0, 0), Cvec3(-2, 0, 0)));
+
+
 
   g_objectNodes.push_back(g_robot1Node);
+  g_objectNodes.push_back(g_robot2Node);
   constructRobot(g_robot1Node, Cvec3(1, 0, 0)); // a Red robot
   constructRobot(g_robot2Node, Cvec3(0, 0, 1)); // a Blue robot
 
@@ -1114,6 +1282,11 @@ static void initScene() {
 
   g_currentCameraNode = g_skyNode;
   dumpSgRbtNodes(g_world, g_map);
+
+
+  
+ //(*g_robot1Node).update();
+  //cout << (*g_robot1Node).getRbt();
 }
 
 int main(int argc, char * argv[]) {

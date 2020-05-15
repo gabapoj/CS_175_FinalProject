@@ -116,6 +116,61 @@ void makeCube(float size, VtxOutIter vtxIter, IdxOutIter idxIter) {
   }
 }
 
+
+template<typename VtxOutIter, typename IdxOutIter>
+void makeTriangle(float size, VtxOutIter vtxIter, IdxOutIter idxIter) {
+    float h = size / 2.0;
+#define DEFV(x, y, z, nx, ny, nz, tu, tv) { \
+    *vtxIter = GenericVertex(x h, y h, z h, \
+                             nx, ny, nz, tu, tv, \
+                             tan[0], tan[1], tan[2], \
+                             bin[0], bin[1], bin[2]); \
+    ++vtxIter; \
+}
+    Cvec3f tan(0, 1, 0), bin(0, 0, 1);
+    DEFV(+, +, -, 1, 0, 0, 1, 0); // facing +X
+    DEFV(+, +, -, 1, 0, 0, 1, 0);
+    DEFV(+, +, +, 1, 0, 0, 1, 1);
+    DEFV(+, -, +, 1, 0, 0, 0, 1);
+
+
+    tan = Cvec3f(0, 0, 1);
+    bin = Cvec3f(1, 0, 0);
+    DEFV(-, +, +, 0, 1, 0, 1, 0); // facing +Y
+    DEFV(-, +, +, 0, 1, 0, 1, 0);
+    DEFV(+, +, +, 0, 1, 0, 1, 1);
+    DEFV(+, +, -, 0, 1, 0, 0, 1);
+
+
+    tan = Cvec3f(1, 0, 0);
+    bin = Cvec3f(0, 1, 0);
+    DEFV(-, +, +, 0, 0, 1, 0, 1); // facing +Z
+    DEFV(+, -, +, 0, 0, 1, 1, 0);
+    DEFV(+, +, +, 0, 0, 1, 1, 1);
+    DEFV(-, +, +, 0, 0, 1, 0, 1);
+    
+    tan = Cvec3f(-1, -1, 2);
+    bin = Cvec3f(-1, 1, 0);
+    DEFV(+, +, -, 0, 0, 0, 0, 1); // back face
+    DEFV(+, -, +, 0, 0, 1, 0, 0);
+    DEFV(-, +, +, 0, 0, 1, 1, 1);
+    DEFV(+, +, -, 0, 0, 0, 0, 1);
+
+
+
+#undef DEFV
+
+    for (int v = 0; v < 24; v += 4) {
+        *idxIter = v;
+        *++idxIter = v + 1;
+        *++idxIter = v + 2;
+        *++idxIter = v;
+        *++idxIter = v + 2;
+        *++idxIter = v + 3;
+        ++idxIter;
+    }
+}
+
 inline void getSphereVbIbLen(int slices, int stacks, int& vbLen, int& ibLen) {
   assert(slices > 1);
   assert(stacks >= 2);

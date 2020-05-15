@@ -126,20 +126,33 @@ private:
 class SgObjectNode : public SgRbtNode {
 public:
     SgObjectNode(const RigTForm& rbt = RigTForm(), const Cvec3 velo = Cvec3(), const Cvec3 velo_buffer = Cvec3())
-        : _velo(velo) {}
+        : _velo(velo) {
+        setRbt(rbt);
+    }
 
     void accelerate(Cvec3 acceleration) {
         _velo_buffer = _velo + acceleration;
     }
     Cvec3 getVelocity() {
-        return _velo;
+        return _velo_buffer;
+    }
+    void setVelocity(Cvec3 newVelo) {
+        _velo_buffer = newVelo;
     }
     void update() {
-        this->setRbt(RigTForm(this->getRbt().getTranslation() + _velo, this->getRbt().getRotation));
+        setRbt(RigTForm(getRbt().getTranslation() +getRbt().getRotation()*_velo, getRbt().getRotation()));
+        _velo = _velo_buffer;
+    }
+    void setMass(double mass) {
+        _mass = mass;
+    }
+    double getMass() {
+        return _mass;
     }
 private:
     Cvec3 _velo;
-    Cvec3 _velo_buffer = Cvec3();
+    Cvec3 _velo_buffer = _velo;
+    double _mass = 1;
 };
 
 // A SgGeometryShapeNode is a Shape node that wraps a user geometry class
